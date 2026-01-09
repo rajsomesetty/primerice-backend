@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.models import Cart, CartItem, Product
 from app.database import get_db
-from app.auth.utils import get_user
+from app.auth.utils import get_current_user 
 
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
 
 # ➕ Add item to cart
 @router.post("/add/{product_id}")
-def add_to_cart(product_id: int, user=Depends(get_user), db: Session = Depends(get_db)):
+def add_to_cart(product_id: int, quantity: int = 1, user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user.id 
 
     product = db.query(Product).get(product_id)
@@ -40,7 +40,7 @@ def add_to_cart(product_id: int, user=Depends(get_user), db: Session = Depends(g
 
 # 🛒 Get My Cart
 @router.get("")
-def get_cart(user=Depends(get_user), db: Session = Depends(get_db)):
+def get_cart(user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user.id 
 
     cart = db.query(Cart).filter(Cart.user_id == user.id).first()
@@ -68,7 +68,7 @@ def get_cart(user=Depends(get_user), db: Session = Depends(get_db)):
 
 # 🔼 Change Quantity
 @router.patch("/update/{item_id}")
-def update_quantity(item_id: int, qty: int, user=Depends(get_user), db: Session = Depends(get_db)):
+def update_quantity(item_id: int, qty: int, user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user.id
 
     item = db.query(CcartItem).join(Cart).filter(
@@ -86,7 +86,7 @@ def update_quantity(item_id: int, qty: int, user=Depends(get_user), db: Session 
 
 # ❌ Remove Item
 @router.delete("/remove/{item_id}")
-def remove_item(item_id: int, user=Depends(get_user), db: Session = Depends(get_db)):
+def remove_item(item_id: int, user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user.id 
 
     item = db.query(CartItem).join(Cart).filter(

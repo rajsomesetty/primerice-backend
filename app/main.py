@@ -8,7 +8,7 @@ from app import models
 app = FastAPI(title="Primerice API")
 
 # Routers
-from app.auth_routes import router as auth_router
+from app.auth.routes import router as auth_router
 from app.products.public_routes import router as public_products_router
 from app.products.admin_routes import router as admin_products_router
 from app.orders.routes import router as orders_router
@@ -61,8 +61,4 @@ app.include_router(orders_router)
 app.include_router(cart_router)
 app.include_router(addresses_router)
 
-# Legacy / admin (remove later if unused)
-app.include_router(admin_router)
-app.include_router(admin_product_router)
-app.include_router(upload_router)
 
