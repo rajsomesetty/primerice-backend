@@ -15,11 +15,6 @@ from app.orders.routes import router as orders_router
 from app.cart.routes import router as cart_router
 from app.addresses.routes import router as addresses_router
 
-# (Optional legacy / admin routes – keep only if still used)
-from app.admin.routes import router as admin_router
-from app.admin.product_routes import router as admin_product_router
-from app.admin.upload_routes import router as upload_router
-
 
 # --------------------
 # CORS

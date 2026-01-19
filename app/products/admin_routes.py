@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 import os
 import shutil
+import uuid
 
 from app.database import SessionLocal
 from app.models import Product
@@ -32,7 +33,7 @@ def list_products(
     db: Session = Depends(get_db),
     _: str = Depends(admin_required),
 ):
-    return db.query(Product).all()
+    return db.query(Product).order_by(Product.id.desc()).all()
 
 
 # --------------------
@@ -50,7 +51,9 @@ def add_product(
     image_url = None
 
     if image:
-        filename = image.filename
+        # ✅ Unique filename to avoid overwrite
+        ext = os.path.splitext(image.filename)[1]
+        filename = f"{uuid.uuid4().hex}{ext}"
         file_path = os.path.join(UPLOAD_DIR, filename)
 
         with open(file_path, "wb") as buffer:
@@ -69,7 +72,10 @@ def add_product(
     db.commit()
     db.refresh(product)
 
-    return product
+    return {
+        "message": "Product created successfully",
+        "product": product,
+    }
 
 
 # --------------------
@@ -95,7 +101,8 @@ def update_product(
     product.description = description
 
     if image:
-        filename = image.filename
+        ext = os.path.splitext(image.filename)[1]
+        filename = f"{uuid.uuid4().hex}{ext}"
         file_path = os.path.join(UPLOAD_DIR, filename)
 
         with open(file_path, "wb") as buffer:
@@ -106,5 +113,38 @@ def update_product(
     db.commit()
     db.refresh(product)
 
-    return product
+    return {
+        "message": "Product updated successfully",
+        "product": product,
+    }
+
+
+# --------------------
+# DELETE PRODUCT  ✅ NEW
+# --------------------
+@router.delete("/{product_id}")
+def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(admin_required),
+):
+    product = db.query(Product).filter(Product.id == product_id).first()
+
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Optional: delete image file
+    if product.image_url:
+        try:
+            path = product.image_url.replace("/uploads/", "")
+            full_path = os.path.join(UPLOAD_DIR, path)
+            if os.path.exists(full_path):
+                os.remove(full_path)
+        except:
+            pass
+
+    db.delete(product)
+    db.commit()
+
+    return {"message": "Product deleted successfully"}
 
