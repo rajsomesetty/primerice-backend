@@ -54,6 +54,7 @@ class Order(Base):
     address_id = Column(Integer, ForeignKey("addresses.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="Pending")
+    tracking_number = Column(String, nullable=True)
 
     user = relationship("User", back_populates="orders")
     address = relationship("Address")
