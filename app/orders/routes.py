@@ -10,27 +10,93 @@ import json
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
-# ===================================================
-# USER APIS (existing – untouched)
-# ===================================================
+# ====================================================
+# 1) ADMIN ROUTES — MUST COME FIRST (STATIC PATHS)
+# ====================================================
+
+@router.get("/all")
+def admin_all_orders(
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_required)
+):
+    orders = db.query(Order).order_by(Order.id.desc()).all()
+
+    return [
+        {
+            "order_id": o.id,
+            "user_id": o.user_id,
+            "total_price": o.total_price,
+            "status": o.status,
+            "created_at": o.created_at.isoformat()
+        }
+        for o in orders
+    ]
+
+
+@router.patch("/{order_id}/status")
+def update_status(
+    order_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_required)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    order.status = body.get("status", order.status)
+
+    db.commit()
+    db.refresh(order)
+
+    return {"message": "Status updated", "status": order.status}
+
+
+# ====================================================
+# 2) USER ADDRESS ROUTES
+# ====================================================
 
 @router.post("/address")
-def save_address(body: dict, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def save_address(
+    body: dict,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
     addr = Address(user_id=user.id, **body)
+
     db.add(addr)
     db.commit()
     db.refresh(addr)
 
-    return addr
+    return {
+        "id": addr.id,
+        "name": addr.name,
+        "mobile": addr.mobile,
+        "address_line": addr.address_line,
+        "city": addr.city,
+        "pincode": addr.pincode
+    }
 
 
 @router.get("/address")
-def get_addresses(db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_addresses(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
     return db.query(Address).filter(Address.user_id == user.id).all()
 
 
+# ====================================================
+# 3) CREATE ORDER
+# ====================================================
+
 @router.post("/create")
-def create_order(address_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def create_order(
+    address_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
     cart = db.query(Cart).filter(Cart.user_id == user.id).first()
 
     if not cart or not cart.items:
@@ -62,14 +128,14 @@ def create_order(address_id: int, db: Session = Depends(get_db), user=Depends(ge
         total_price=total,
         address_id=address_id,
         created_at=datetime.utcnow(),
-        status="PLACED"
+        status="Pending"
     )
 
     db.add(order)
     db.commit()
     db.refresh(order)
 
-    # clear cart
+    # Clear cart
     db.query(CartItem).filter(CartItem.cart_id == cart.id).delete()
     cart.total_price = 0
     db.commit()
@@ -77,22 +143,40 @@ def create_order(address_id: int, db: Session = Depends(get_db), user=Depends(ge
     return {"order_id": order.id, "total_price": total}
 
 
+# ====================================================
+# 4) USER ORDERS LIST
+# ====================================================
+
 @router.get("/my")
-def get_my_orders(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    orders = db.query(Order).filter(Order.user_id == user.id).order_by(Order.id.desc()).all()
+def get_my_orders(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    orders = db.query(Order).filter(
+        Order.user_id == user.id
+    ).order_by(Order.id.desc()).all()
 
     return [
         {
-            "id": o.id,
+            "order_id": o.id,
             "created_at": o.created_at.isoformat(),
-            "total": o.total_price,
+            "total_price": o.total_price,
             "status": o.status
-        } for o in orders
+        }
+        for o in orders
     ]
 
 
+# ====================================================
+# 5) SINGLE ORDER — KEEP THIS LAST 🔥
+# ====================================================
+
 @router.get("/{order_id}")
-def get_order(order_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
     order = db.query(Order).filter(
         Order.id == order_id,
         Order.user_id == user.id
@@ -101,76 +185,22 @@ def get_order(order_id: int, db: Session = Depends(get_db), user=Depends(get_cur
     if not order:
         raise HTTPException(404, "Order not found")
 
-    address = db.query(Address).filter(Address.id == order.address_id).first()
+    address = db.query(Address).filter(
+        Address.id == order.address_id
+    ).first()
 
     return {
-        "id": order.id,
-        "total": order.total_price,
+        "order_id": order.id,
+        "total_price": order.total_price,
         "status": order.status,
         "items": json.loads(order.items_json),
-        "address": address,
+        "address": {
+            "name": address.name,
+            "mobile": address.mobile,
+            "address_line": address.address_line,
+            "city": address.city,
+            "pincode": address.pincode
+        },
         "created_at": order.created_at.isoformat()
     }
-
-
-# ===================================================
-# 🔐 ADMIN APIS
-# ===================================================
-
-@router.get("/all")
-def admin_all_orders(
-    db: Session = Depends(get_db),
-    _: User = Depends(admin_required)
-):
-    orders = db.query(Order).order_by(Order.id.desc()).all()
-
-    result = []
-
-    for o in orders:
-        user = db.query(User).filter(User.id == o.user_id).first()
-
-        result.append({
-            "id": o.id,
-            "total": o.total_price,
-            "status": o.status,
-            "created_at": o.created_at.isoformat(),
-            "user": {
-                "id": user.id,
-                "name": user.name,
-                "mobile": user.mobile
-            }
-        })
-
-    return result
-
-
-@router.patch("/{order_id}/status")
-def update_status(
-    order_id: int,
-    body: dict,
-    db: Session = Depends(get_db),
-    _: User = Depends(admin_required)
-):
-    order = db.query(Order).filter(Order.id == order_id).first()
-
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    status = body.get("status")
-
-    allowed = [
-        "PLACED",
-        "PROCESSING",
-        "SHIPPED",
-        "DELIVERED",
-        "CANCELLED"
-    ]
-
-    if status not in allowed:
-        raise HTTPException(400, "Invalid status")
-
-    order.status = status
-    db.commit()
-
-    return {"message": "updated", "status": status}
 
