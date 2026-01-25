@@ -4,7 +4,8 @@ from app.database import Base
 from datetime import datetime
 
 
-# USERS
+# ================= USERS =================
+
 class User(Base):
     __tablename__ = "users"
 
@@ -18,7 +19,8 @@ class User(Base):
     addresses = relationship("Address", back_populates="user", cascade="all, delete")
 
 
-# ADDRESSES
+# ================= ADDRESSES =================
+
 class Address(Base):
     __tablename__ = "addresses"
 
@@ -33,23 +35,40 @@ class Address(Base):
     user = relationship("User", back_populates="addresses")
 
 
-# PRODUCTS
+# ================= CATEGORIES =================
+
+class Category(Base):
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+
+    products = relationship("Product", back_populates="category")
+
+
+# ================= PRODUCTS =================
+
 class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
-    description = Column(Text, nullable=True)   # ✅ ADD THIS
+    description = Column(Text, nullable=True)
     image_url = Column(String)
 
-# ORDERS
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    category = relationship("Category", back_populates="products")
+
+
+# ================= ORDERS =================
+
 class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    items_json = Column(String)
+    items_json = Column(Text)
     total_price = Column(Float)
     address_id = Column(Integer, ForeignKey("addresses.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -59,7 +78,9 @@ class Order(Base):
     user = relationship("User", back_populates="orders")
     address = relationship("Address")
 
-# --- CART ---
+
+# ================= CART =================
+
 class Cart(Base):
     __tablename__ = "carts"
 
@@ -67,7 +88,7 @@ class Cart(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     total_price = Column(Float, default=0.0)
 
-    items = relationship("CartItem", back_populates="cart")
+    items = relationship("CartItem", back_populates="cart", cascade="all, delete")
 
 
 class CartItem(Base):

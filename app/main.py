@@ -17,6 +17,7 @@ from app.addresses.routes import router as addresses_router
 from app.admin.user_routes import router as admin_users_router
 from app.admin.order_routes import router as admin_orders_router
 from app.admin.order_routes import router as admin_orders_router
+from app.products.category_routes import router as category_router
 
 
 
@@ -62,3 +63,4 @@ app.include_router(addresses_router)
 app.include_router(admin_users_router)
 app.include_router(admin_orders_router)
 app.include_router(admin_orders_router)
+app.include_router(category_router)
