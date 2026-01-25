@@ -1,95 +1,74 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-import json
-from datetime import datetime
-
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Order, User, Address
 from app.auth.utils import admin_required
+import json
 
 router = APIRouter(prefix="/admin/orders", tags=["Admin Orders"])
 
 
-# ✅ LIST WITH FILTERS
+# ================= LIST ORDERS =================
+
 @router.get("")
-def list_orders(
-    status: str | None = None,
-    db: Session = Depends(get_db),
-    _: User = Depends(admin_required),
-):
-    q = db.query(Order)
+def list_orders(status: str | None = None, db: Session = Depends(get_db), _=Depends(admin_required)):
+    q = db.query(Order).options(joinedload(Order.user), joinedload(Order.address))
 
     if status:
         q = q.filter(Order.status == status)
 
     orders = q.order_by(Order.id.desc()).all()
 
-    result = []
-    for o in orders:
-        user = db.query(User).filter(User.id == o.user_id).first()
-        addr = db.query(Address).filter(Address.id == o.address_id).first()
-
-        result.append({
-            "order_id": o.id,
-            "total_price": o.total_price,
+    return [
+        {
+            "id": o.id,
+            "total": o.total_price,
             "status": o.status,
             "tracking_number": o.tracking_number,
-            "created_at": o.created_at.isoformat(),
-
+            "created_at": o.created_at,
             "user": {
-                "name": user.name,
-                "mobile": user.mobile
+                "name": o.user.name,
+                "mobile": o.user.mobile,
             },
-
             "address": {
-                "name": addr.name,
-                "mobile": addr.mobile,
-                "address_line": addr.address_line,
-                "city": addr.city,
-                "pincode": addr.pincode
+                "name": o.address.name,
+                "mobile": o.address.mobile,
+                "address_line": o.address.address_line,
+                "city": o.address.city,
+                "pincode": o.address.pincode,
             },
+            "items": json.loads(o.items_json),
+        }
+        for o in orders
+    ]
 
-            "items": json.loads(o.items_json or "[]")
-        })
 
-    return result
+# ================= UPDATE STATUS =================
 
+@router.put("/{order_id}/status")
+def update_status(order_id: int, status: str, db: Session = Depends(get_db), _=Depends(admin_required)):
+    order = db.query(Order).filter(Order.id == order_id).first()
 
-# ✅ UPDATE STATUS + TRACKING
-@router.put("/{order_id}")
-def update_order(
-    order_id: int,
-    body: dict,
-    db: Session = Depends(get_db),
-    _: User = Depends(admin_required),
-):
-    o = db.query(Order).filter(Order.id == order_id).first()
-
-    if not o:
+    if not order:
         raise HTTPException(404, "Order not found")
 
-    o.status = body.get("status", o.status)
-    o.tracking_number = body.get("tracking_number", o.tracking_number)
-
+    order.status = status
     db.commit()
 
-    return {"message": "updated"}
+    return {"success": True}
 
 
-# ✅ REVENUE STATS
-@router.get("/stats")
-def stats(
-    db: Session = Depends(get_db),
-    _: User = Depends(admin_required),
-):
-    orders = db.query(Order).all()
+# ================= UPDATE TRACKING =================
 
-    total = sum(o.total_price for o in orders)
+@router.put("/{order_id}/tracking")
+def update_tracking(order_id: int, tracking: str, db: Session = Depends(get_db), _=Depends(admin_required)):
+    order = db.query(Order).filter(Order.id == order_id).first()
 
-    return {
-        "total_orders": len(orders),
-        "revenue": total,
-        "pending": len([o for o in orders if o.status == "Pending"]),
-        "shipped": len([o for o in orders if o.status == "Shipped"]),
-    }
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    order.tracking_number = tracking
+    db.commit()
+
+    return {"success": True}
 
